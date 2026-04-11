@@ -87,12 +87,32 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// --- API SẢN PHẨM Ở ĐÂY (Giữ nguyên đoạn code API lấy products lúc nãy) ---
+// ==========================================
+// API: LẤY DANH SÁCH & TÌM KIẾM SẢN PHẨM
+// ==========================================
 app.get('/api/products', async (req, res) => {
   try {
-    const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
+    // 1. Lấy từ khóa 'search' từ đường dẫn URL
+    const { search } = req.query; 
+
+    // 2. Tạo điều kiện lọc (chứa từ khóa, phân biệt hoa thường tuỳ database)
+    const whereCondition = search 
+      ? { 
+          name: { 
+            contains: search 
+          } 
+        } 
+      : {}; 
+
+    // 3. Lấy dữ liệu từ Database
+    const products = await prisma.product.findMany({ 
+      where: whereCondition,
+      orderBy: { createdAt: 'desc' } 
+    });
+    
     res.status(200).json(products);
   } catch (error) {
+    console.error("Lỗi khi lấy sản phẩm:", error);
     res.status(500).json({ message: 'Lỗi server khi lấy danh sách sản phẩm' });
   }
 });

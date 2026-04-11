@@ -1,4 +1,6 @@
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
+import axios from 'axios';
 
 const CATEGORIES = [
   { id: 1, name: 'Thời Trang Nam', icon: '👕' },
@@ -9,19 +11,82 @@ const CATEGORIES = [
   { id: 6, name: 'Đồng Hồ', icon: '⌚' },
 ];
 
-const PRODUCTS = [
-  { id: 1, name: 'Áo thun nam cotton thoáng mát', price: '99.000đ', sold: '1,2k', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lsmr0k80v2yv15_tn' },
-  { id: 2, name: 'Tai nghe Bluetooth không dây', price: '250.000đ', sold: '850', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lsth4s30iit5ce_tn' },
-  { id: 3, name: 'Ốp lưng iPhone 15 Pro Max', price: '50.000đ', sold: '5,4k', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-ls8u7v1tq8fxf6_tn' },
-  { id: 4, name: 'Bàn phím cơ gaming RGB', price: '890.000đ', sold: '340', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lsmr0k80whip43_tn' },
-  { id: 5, name: 'Chuột không dây Logitech', price: '199.000đ', sold: '2k', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lsmr0k80xx3545_tn' },
-  { id: 6, name: 'Sạc dự phòng 10000mAh', price: '320.000đ', sold: '1,5k', image: 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lsmr0k80zblld6_tn' },
-];
-
 export default function Home() {
   const navigate = useNavigate();
   const userData = localStorage.getItem('user');
   const user = userData ? JSON.parse(userData) : null;
+
+  // --- STATES ---
+  const [products, setProducts] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // States mới cho tính năng Gợi ý tìm kiếm
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null); // Dùng để nhận diện click ra ngoài
+
+  // --- API CALLS ---
+  const fetchProducts = async (keyword = '') => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/products?search=${keyword}`);
+      setProducts(response.data);
+    } catch (error) {
+      console.error("Lỗi khi tải sản phẩm:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // Effect lắng nghe khi gõ phím để gọi API lấy gợi ý
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (searchTerm.trim() === '') {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+      try {
+        const response = await axios.get(`http://localhost:5000/api/products?search=${searchTerm}`);
+        // Lấy tối đa 8 sản phẩm đầu tiên làm gợi ý cho đỡ dài
+        setSuggestions(response.data.slice(0, 8)); 
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error("Lỗi khi tải gợi ý:", error);
+      }
+    };
+
+    // Kỹ thuật Debounce: Đợi người dùng ngừng gõ 300ms mới gọi API để giảm tải server
+    const timeoutId = setTimeout(() => {
+      fetchSuggestions();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  // Effect ẩn gợi ý khi click ra ngoài vùng tìm kiếm
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // --- HANDLERS ---
+  const handleSearch = () => {
+    setShowSuggestions(false);
+    fetchProducts(searchTerm);
+  };
+
+  const handleSuggestionClick = (suggestionName: string) => {
+    setSearchTerm(suggestionName);
+    setShowSuggestions(false);
+    fetchProducts(suggestionName); // Tìm kiếm luôn ngay khi click gợi ý
+  };
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -37,11 +102,66 @@ export default function Home() {
     <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh', paddingBottom: '50px' }}>
       <header style={{ backgroundColor: '#ee4d2d', padding: '15px 0', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
-          <h1 style={{ color: 'white', margin: 0, fontSize: '24px', cursor: 'pointer' }}>🛒 ANC Store</h1>
-          <div style={{ flex: 1, margin: '0 40px', display: 'flex' }}>
-            <input type="text" placeholder="Tìm kiếm sản phẩm, thương hiệu..." style={{ width: '100%', padding: '10px 15px', borderRadius: '2px', border: 'none', outline: 'none' }} />
-            <button style={{ backgroundColor: '#fb5533', color: 'white', border: 'none', padding: '0 20px', cursor: 'pointer', borderRadius: '0 2px 2px 0' }}>Tìm</button>
+          <h1 onClick={() => { setSearchTerm(''); fetchProducts(''); }} style={{ color: 'white', margin: 0, fontSize: '24px', cursor: 'pointer' }}>🛒 ANC Store</h1>
+          
+          {/* VÙNG TÌM KIẾM (CÓ REF) */}
+          <div ref={searchRef} style={{ flex: 1, margin: '0 40px', display: 'flex', position: 'relative' }}>
+            <input 
+              type="text" 
+              placeholder="Tìm kiếm sản phẩm, thương hiệu..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => { if(searchTerm.trim() !== '') setShowSuggestions(true); }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
+              style={{ width: '100%', padding: '10px 15px', borderRadius: '2px', border: 'none', outline: 'none' }} 
+            />
+            <button 
+              onClick={handleSearch}
+              style={{ backgroundColor: '#fb5533', color: 'white', border: 'none', padding: '0 20px', cursor: 'pointer', borderRadius: '0 2px 2px 0' }}
+            >
+              Tìm
+            </button>
+
+            {/* BẢNG DROPDOWN GỢI Ý TÌM KIẾM */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 2px)', // Cách thanh input 2px
+                left: 0,
+                width: 'calc(100% - 68px)', // Chiều rộng bằng input (trừ đi nút tìm kiếm)
+                backgroundColor: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                borderRadius: '2px',
+                zIndex: 1000,
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                {suggestions.map((item) => (
+                  <div 
+                    key={item.id}
+                    onClick={() => handleSuggestionClick(item.name)}
+                    style={{
+                      padding: '12px 15px',
+                      cursor: 'pointer',
+                      color: '#333',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      borderBottom: '1px solid #f5f5f5'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    {/* Icon kính lúp nhỏ trước mỗi dòng gợi ý */}
+                    <span style={{ fontSize: '12px', color: '#888' }}>🔍</span> 
+                    {item.name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', color: 'white' }}>
             <span style={{ fontSize: '14px' }}>Chào, <strong>{user.fullName}</strong></span>
             <button onClick={handleLogout} style={{ backgroundColor: 'transparent', color: 'white', border: '1px solid white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>Đăng Xuất</button>
@@ -66,22 +186,31 @@ export default function Home() {
           </div>
         </div>
 
-        <h3 style={{ margin: '0 0 15px 0', color: '#ee4d2d', backgroundColor: 'white', padding: '15px', borderBottom: '2px solid #ee4d2d' }}>GỢI Ý HÔM NAY</h3>
+        <h3 style={{ margin: '0 0 15px 0', color: '#ee4d2d', backgroundColor: 'white', padding: '15px', borderBottom: '2px solid #ee4d2d' }}>
+          {searchTerm && !showSuggestions ? `KẾT QUẢ TÌM KIẾM CHO "${searchTerm}"` : 'GỢI Ý HÔM NAY'}
+        </h3>
+        
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
-          {PRODUCTS.map(product => (
-            <div key={product.id} style={{ backgroundColor: 'white', borderRadius: '2px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'} onMouseOut={(e) => e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)'}>
-              <div style={{ width: '100%', paddingTop: '100%', position: 'relative', backgroundColor: '#fafafa' }}>
-                <img src={product.image} alt={product.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '12px', color: '#333', lineHeight: '16px', height: '32px', overflow: 'hidden', marginBottom: '10px' }}>{product.name}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#ee4d2d', fontWeight: 'bold', fontSize: '16px' }}>{product.price}</span>
-                  <span style={{ fontSize: '12px', color: 'gray' }}>Đã bán {product.sold}</span>
+          {products.length > 0 ? (
+            products.map(product => (
+              <div key={product.id} style={{ backgroundColor: 'white', borderRadius: '2px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onMouseOver={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'} onMouseOut={(e) => e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)'}>
+                <div style={{ width: '100%', paddingTop: '100%', position: 'relative', backgroundColor: '#fafafa' }}>
+                  <img src={product.image} alt={product.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: '12px', color: '#333', lineHeight: '16px', height: '32px', overflow: 'hidden', marginBottom: '10px' }}>{product.name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#ee4d2d', fontWeight: 'bold', fontSize: '16px' }}>{product.price}</span>
+                    <span style={{ fontSize: '12px', color: 'gray' }}>Đã bán {product.sold}</span>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div style={{ padding: '20px', gridColumn: '1 / -1', textAlign: 'center', color: '#555' }}>
+              Không tìm thấy sản phẩm nào!
             </div>
-          ))}
+          )}
         </div>
       </main>
     </div>
