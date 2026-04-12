@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
 const CATEGORIES = [
@@ -19,6 +19,7 @@ export default function Home() {
   // --- STATES ---
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [cartCount, setCartCount] = useState(0);
   
   // States mới cho tính năng Gợi ý tìm kiếm
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -35,8 +36,25 @@ export default function Home() {
     }
   };
 
+  const fetchCartCount = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return; // Không có token thì thôi, không gọi API
+
+    try {
+      const response = await axios.get('http://localhost:5000/api/cart', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Cộng dồn số lượng của tất cả sản phẩm trong giỏ
+      const totalItems = response.data.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      setCartCount(totalItems);
+    } catch (error) {
+      console.error("Lỗi khi tải số lượng giỏ hàng:", error);
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchCartCount(); // Gọi thêm hàm này để lấy số lượng giỏ hàng
   }, []);
 
   // Effect lắng nghe khi gõ phím để gọi API lấy gợi ý
@@ -114,6 +132,7 @@ export default function Home() {
       );
 
       alert(response.data.message);
+      fetchCartCount(); // ĐÃ THÊM: Cập nhật lại con số trên Header ngay lập tức
       
     } catch (error: any) {
       console.error(error);
@@ -129,9 +148,46 @@ export default function Home() {
     <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh', paddingBottom: '50px' }}>
       <header style={{ backgroundColor: '#ee4d2d', padding: '15px 0', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
-          <h1 onClick={() => { setSearchTerm(''); fetchProducts(''); }} style={{ color: 'white', margin: 0, fontSize: '24px', cursor: 'pointer' }}>🛒 ANC Store</h1>
-          
-          <div ref={searchRef} style={{ flex: 1, margin: '0 40px', display: 'flex', position: 'relative' }}>
+  
+  {/* --- KHU VỰC LOGO & GIỎ HÀNG CHUNG MỘT KHỐI --- */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
+    <h1 onClick={() => { setSearchTerm(''); fetchProducts(''); }} style={{ color: 'white', margin: 0, fontSize: '24px', cursor: 'pointer' }}>
+      🛒 ANC Store
+    </h1>
+
+    <Link 
+      to="/cart" 
+      style={{ 
+        textDecoration: 'none', 
+        color: 'white', 
+        display: 'flex', 
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+        padding: '8px 15px', 
+        borderRadius: '6px',
+        transition: '0.3s'
+      }}
+    >
+      <span style={{ fontSize: '18px', marginRight: '8px' }}>🛍️</span>
+      <span style={{ fontWeight: '500', fontSize: '14px' }}>Giỏ hàng</span>
+      
+      {/* Badge hiện số lượng (Tạm thời để số 2, sau sẽ nối API) */}
+      <span style={{
+        backgroundColor: 'white',
+        color: '#ee4d2d', // Chữ màu cam cho nổi bật trên nền trắng
+        borderRadius: '50%',
+        padding: '2px 7px',
+        fontSize: '12px',
+        marginLeft: '8px',
+        fontWeight: 'bold'
+      }}>
+        {cartCount}
+      </span>
+    </Link>
+  </div>
+  {/* --- KẾT THÚC KHU VỰC LOGO & GIỎ HÀNG --- */}
+
+  <div ref={searchRef} style={{ flex: 1, margin: '0 40px', display: 'flex', position: 'relative' }}>
             <input 
               type="text" 
               placeholder="Tìm kiếm sản phẩm, thương hiệu..." 

@@ -88,7 +88,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// API: LẤY DANH SÁCH & TÌM KIẾM SẢN PHẨM
+// API: LẤY DANH SÁCH & TÌM KIẾM SẢN cộng
 // ==========================================
 app.get('/api/products', async (req, res) => {
   try {
@@ -166,6 +166,72 @@ app.post('/api/cart', async (req, res) => {
   } catch (error) {
     console.error("Lỗi thêm giỏ hàng:", error);
     res.status(500).json({ message: 'Lỗi server hoặc phiên đăng nhập hết hạn' });
+  }
+});
+
+// ==========================================
+// API: LẤY DANH SÁCH GIỎ HÀNG CỦA USER
+// ==========================================
+app.get('/api/cart', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ message: 'Vui lòng đăng nhập!' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.userId;
+
+    // Tìm giỏ hàng và JOIN với bảng Product để lấy Tên, Giá, Ảnh
+    const cartItems = await prisma.cartItem.findMany({
+      where: { userId: userId },
+      include: {
+        product: true 
+      },
+      orderBy: { id: 'desc' } // Sắp xếp sản phẩm mới thêm lên đầu
+    });
+
+    res.status(200).json(cartItems);
+  } catch (error) {
+    console.error("Lỗi lấy giỏ hàng:", error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// ==========================================
+// API: CẬP NHẬT SỐ LƯỢNG TRONG GIỎ HÀNG
+// ==========================================
+app.put('/api/cart/:id', async (req, res) => {
+  try {
+    const cartItemId = parseInt(req.params.id);
+    const { quantity } = req.body;
+
+    const updatedItem = await prisma.cartItem.update({
+      where: { id: cartItemId },
+      data: { quantity: quantity }
+    });
+
+    res.status(200).json(updatedItem);
+  } catch (error) {
+    console.error("Lỗi cập nhật số lượng:", error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// ==========================================
+// API: XÓA SẢN PHẨM KHỎI GIỎ HÀNG
+// ==========================================
+app.delete('/api/cart/:id', async (req, res) => {
+  try {
+    const cartItemId = parseInt(req.params.id);
+
+    await prisma.cartItem.delete({
+      where: { id: cartItemId }
+    });
+
+    res.status(200).json({ message: 'Đã xóa khỏi giỏ hàng' });
+  } catch (error) {
+    console.error("Lỗi xóa sản phẩm:", error);
+    res.status(500).json({ message: 'Lỗi server' });
   }
 });
 
