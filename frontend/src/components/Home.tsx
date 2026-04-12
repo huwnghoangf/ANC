@@ -23,7 +23,7 @@ export default function Home() {
   // States mới cho tính năng Gợi ý tìm kiếm
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null); // Dùng để nhận diện click ra ngoài
+  const searchRef = useRef<HTMLDivElement>(null);
 
   // --- API CALLS ---
   const fetchProducts = async (keyword = '') => {
@@ -49,7 +49,6 @@ export default function Home() {
       }
       try {
         const response = await axios.get(`http://localhost:5000/api/products?search=${searchTerm}`);
-        // Lấy tối đa 8 sản phẩm đầu tiên làm gợi ý cho đỡ dài
         setSuggestions(response.data.slice(0, 8)); 
         setShowSuggestions(true);
       } catch (error) {
@@ -57,7 +56,6 @@ export default function Home() {
       }
     };
 
-    // Kỹ thuật Debounce: Đợi người dùng ngừng gõ 300ms mới gọi API để giảm tải server
     const timeoutId = setTimeout(() => {
       fetchSuggestions();
     }, 300);
@@ -65,7 +63,7 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
-  // Effect ẩn gợi ý khi click ra ngoài vùng tìm kiếm
+  // Effect ẩn gợi ý khi click ra ngoài
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -85,12 +83,8 @@ export default function Home() {
   const handleSuggestionClick = (suggestionName: string) => {
     setSearchTerm(suggestionName);
     setShowSuggestions(false);
-    fetchProducts(suggestionName); // Tìm kiếm luôn ngay khi click gợi ý
+    fetchProducts(suggestionName);
   };
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -98,13 +92,45 @@ export default function Home() {
     navigate('/login');
   };
 
+  // HÀM MỚI: XỬ LÝ THÊM VÀO GIỎ HÀNG
+  const handleAddToCart = async (productId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        alert('Bạn cần đăng nhập để thêm vào giỏ hàng!');
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.post(
+        'http://localhost:5000/api/cart',
+        { productId: productId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      alert(response.data.message);
+      
+    } catch (error: any) {
+      console.error(error);
+      alert(error.response?.data?.message || 'Có lỗi xảy ra khi thêm vào giỏ');
+    }
+  };
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh', paddingBottom: '50px' }}>
       <header style={{ backgroundColor: '#ee4d2d', padding: '15px 0', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
           <h1 onClick={() => { setSearchTerm(''); fetchProducts(''); }} style={{ color: 'white', margin: 0, fontSize: '24px', cursor: 'pointer' }}>🛒 ANC Store</h1>
           
-          {/* VÙNG TÌM KIẾM (CÓ REF) */}
           <div ref={searchRef} style={{ flex: 1, margin: '0 40px', display: 'flex', position: 'relative' }}>
             <input 
               type="text" 
@@ -122,13 +148,12 @@ export default function Home() {
               Tìm
             </button>
 
-            {/* BẢNG DROPDOWN GỢI Ý TÌM KIẾM */}
             {showSuggestions && suggestions.length > 0 && (
               <div style={{
                 position: 'absolute',
-                top: 'calc(100% + 2px)', // Cách thanh input 2px
+                top: 'calc(100% + 2px)',
                 left: 0,
-                width: 'calc(100% - 68px)', // Chiều rộng bằng input (trừ đi nút tìm kiếm)
+                width: 'calc(100% - 68px)',
                 backgroundColor: 'white',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                 borderRadius: '2px',
@@ -153,7 +178,6 @@ export default function Home() {
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
                   >
-                    {/* Icon kính lúp nhỏ trước mỗi dòng gợi ý */}
                     <span style={{ fontSize: '12px', color: '#888' }}>🔍</span> 
                     {item.name}
                   </div>
@@ -197,13 +221,41 @@ export default function Home() {
                 <div style={{ width: '100%', paddingTop: '100%', position: 'relative', backgroundColor: '#fafafa' }}>
                   <img src={product.image} alt={product.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
+                
                 <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: '12px', color: '#333', lineHeight: '16px', height: '32px', overflow: 'hidden', marginBottom: '10px' }}>{product.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#ee4d2d', fontWeight: 'bold', fontSize: '16px' }}>{product.price}</span>
-                    <span style={{ fontSize: '12px', color: 'gray' }}>Đã bán {product.sold}</span>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#333', lineHeight: '16px', height: '32px', overflow: 'hidden', marginBottom: '10px' }}>{product.name}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#ee4d2d', fontWeight: 'bold', fontSize: '16px' }}>{product.price}</span>
+                      <span style={{ fontSize: '12px', color: 'gray' }}>Đã bán {product.sold}</span>
+                    </div>
                   </div>
+                  
+                  {/* NÚT THÊM VÀO GIỎ HÀNG */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài
+                      handleAddToCart(product.id);
+                    }}
+                    style={{
+                      marginTop: '12px',
+                      width: '100%',
+                      padding: '8px 0',
+                      backgroundColor: '#ee4d2d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#d73e1f'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ee4d2d'}
+                  >
+                    Thêm vào giỏ
+                  </button>
                 </div>
+
               </div>
             ))
           ) : (
