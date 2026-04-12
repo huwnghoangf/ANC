@@ -1,25 +1,45 @@
+// THÊM ĐOẠN NÀY ĐỂ PRISMA BIẾT ĐƯỜNG SINH CODE CHO NODE.JS
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"  // <-- Thay env("DATABASE_URL") thành chuỗi này
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   fullName  String
-  email     String   @unique
+  email     String     @unique
   password  String
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
+  
+  // Một User có thể có nhiều sản phẩm trong giỏ hàng
+  cartItems CartItem[] 
 }
 
 model Product {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   name      String
-  price     String   
+  price     String
   sold      String
   image     String
+  createdAt DateTime   @default(now())
+  
+  // Một sản phẩm có thể nằm trong giỏ hàng của nhiều User
+  cartItems CartItem[] 
+}
+
+// BẢNG MỚI: QUẢN LÝ GIỎ HÀNG
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  quantity  Int      @default(1) // Mặc định thêm vào giỏ là 1 cái
+  userId    Int
+  productId Int
+  
+  // Liên kết khóa ngoại
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
   createdAt DateTime @default(now())
 }

@@ -117,6 +117,58 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
+// ==========================================
+// API: THÊM VÀO GIỎ HÀNG (SCRUM-6)
+// ==========================================
+app.post('/api/cart', async (req, res) => {
+  try {
+    // 1. Lấy Token từ Frontend gửi lên để biết AI đang thao tác
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: 'Vui lòng đăng nhập để mua hàng!' });
+    }
+
+    // 2. Giải mã Token để lấy ID của User
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.userId;
+
+    // 3. Lấy ID sản phẩm Frontend gửi lên
+    const { productId } = req.body;
+
+    // 4. Kiểm tra xem món này đã có trong giỏ hàng của User này chưa
+    const existingCartItem = await prisma.cartItem.findFirst({
+      where: { 
+        userId: userId, 
+        productId: productId 
+      }
+    });
+
+    if (existingCartItem) {
+      // Nếu có rồi -> Tăng số lượng lên 1
+      const updatedItem = await prisma.cartItem.update({
+        where: { id: existingCartItem.id },
+        data: { quantity: existingCartItem.quantity + 1 }
+      });
+      return res.status(200).json({ message: 'Đã tăng số lượng sản phẩm trong giỏ!', cartItem: updatedItem });
+    }
+
+    // 5. Nếu chưa có -> Tạo mới vào giỏ hàng
+    const newCartItem = await prisma.cartItem.create({
+      data: {
+        userId: userId,
+        productId: productId,
+        quantity: 1
+      }
+    });
+
+    res.status(201).json({ message: 'Đã thêm sản phẩm vào giỏ hàng!', cartItem: newCartItem });
+  } catch (error) {
+    console.error("Lỗi thêm giỏ hàng:", error);
+    res.status(500).json({ message: 'Lỗi server hoặc phiên đăng nhập hết hạn' });
+  }
+});
+
 // Khởi động server
 const PORT = 5000;
 app.listen(PORT, () => {
