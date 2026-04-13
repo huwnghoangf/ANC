@@ -235,6 +235,76 @@ app.delete('/api/cart/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// API: THANH TOÁN (CHỐT ĐƠN)
+// ==========================================
+app.post('/api/checkout', async (req, res) => {
+  try {
+    // 1. Xác thực người dùng qua Token
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ message: 'Vui lòng đăng nhập để thanh toán!' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.userId;
+
+    // 2. Lấy thông tin giỏ hàng và tổng tiền từ Frontend gửi lên
+    const { cartItems, totalAmount } = req.body;
+
+    if (!cartItems || cartItems.length === 0) {
+      return res.status(400).json({ message: 'Giỏ hàng đang trống!' });
+    }
+
+    // Tạo mã đơn hàng tự động (Ví dụ: ANC-1683929103)
+    const orderNumber = "ANC-" + Date.now(); 
+
+    // 3. Sử dụng Transaction để đảm bảo 3 bước được thực hiện đồng thời an toàn
+    const result = await prisma.$transaction(async (tx) => {
+      
+      // Bước A: Lưu thông tin Đơn hàng chung
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber: orderNumber,
+          totalAmount: parseFloat(totalAmount),
+          userId: userId // Gắn ID người mua vào đơn hàng
+        }
+      });
+
+      // Bước B: Chuyển dữ liệu từ CartItem sang OrderItem
+      const orderItemsData = cartItems.map(item => ({
+        orderId: newOrder.id,
+        name: item.product.name,
+        // Ép kiểu giá từ chuỗi (vd: "530.000đ") về dạng số (530000)
+        price: parseFloat(item.product.price.replace(/[^0-9]/g, '')), 
+        quantity: item.quantity,
+        image: item.product.image
+      }));
+
+      // Lưu hàng loạt chi tiết đơn hàng
+      await tx.orderItem.createMany({
+        data: orderItemsData
+      });
+
+      // Bước C: Xóa sạch giỏ hàng của riêng User này
+      await tx.cartItem.deleteMany({
+        where: { userId: userId }
+      });
+
+      return newOrder; // Trả về thông tin đơn hàng vừa tạo
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Thanh toán thành công!', 
+      order: result 
+    });
+
+  } catch (error) {
+    console.error("Lỗi thanh toán:", error);
+    res.status(500).json({ message: 'Lỗi server khi xử lý thanh toán' });
+  }
+});
+
 // Khởi động server
 const PORT = 5000;
 app.listen(PORT, () => {

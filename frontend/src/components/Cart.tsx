@@ -6,6 +6,8 @@ export default function Cart() {
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // 1. GỌI API LẤY GIỎ HÀNG
   const fetchCart = async () => {
@@ -72,6 +74,53 @@ export default function Cart() {
     }, 0);
   };
 
+  // XỬ LÝ THANH TOÁN THẬT VỚI API BACKEND
+  const handlePayment = async () => {
+    // 1. Lấy token để xác thực người dùng
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert("Vui lòng đăng nhập để thanh toán!");
+      navigate('/login');
+      return;
+    }
+
+    setIsProcessingPayment(true); // Bật hiệu ứng loading xoay xoay
+
+    try {
+      // 2. Gọi API POST chốt đơn, kèm Header chứa Token
+      const response = await axios.post(
+        'http://localhost:5000/api/checkout', 
+        {
+          cartItems: cartItems, // Truyền danh sách giỏ hàng hiện tại
+          totalAmount: calculateTotal() // Truyền tổng tiền
+        }, 
+        {
+          headers: { 
+            'Authorization': `Bearer ${token}` // <--- ĐÂY LÀ CHỖ ĐỂ CHÈN TOKEN NÈ
+          }
+        }
+      );
+
+      // 3. Xử lý khi Backend báo thành công
+      if (response.data.success) {
+        setIsProcessingPayment(false); // Tắt loading
+        setShowPaymentModal(false);    // Đóng popup
+        
+        // Báo thành công kèm mã đơn hàng lấy từ Backend trả về
+        alert(`🎉 ${response.data.message}\nMã đơn hàng của bạn là: ${response.data.order.orderNumber}`);
+        
+        // Xóa rỗng giỏ hàng trên giao diện (tránh phải gọi lại API fetchCart)
+        setCartItems([]); 
+        
+        // Chuyển hướng về trang chủ
+        navigate('/');
+      }
+    } catch (error) {
+      console.error("Lỗi thanh toán:", error);
+      alert("Có lỗi xảy ra khi kết nối với ngân hàng (hoặc server). Vui lòng thử lại!");
+      setIsProcessingPayment(false);
+    }
+  };
   if (loading) return <div style={{ textAlign: 'center', marginTop: '50px' }}>Đang tải giỏ hàng...</div>;
 
   return (
@@ -177,7 +226,9 @@ export default function Cart() {
                 </span>
               </div>
 
-              <button style={{ width: '100%', padding: '12px', backgroundColor: '#ee4d2d', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button 
+                onClick={() => setShowPaymentModal(true)} 
+                style={{ width: '100%', padding: '12px', backgroundColor: '#ee4d2d', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
                 Tiến hành thanh toán
               </button>
             </div>
@@ -185,6 +236,55 @@ export default function Cart() {
           </div>
         )}
       </main>
+      {/* POPUP THANH TOÁN GIẢ LẬP */}
+      {showPaymentModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', padding: '30px', borderRadius: '12px',
+            width: '400px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+          }}>
+            <h2 style={{ color: '#ee4d2d', marginTop: 0 }}>ANC Mock Pay</h2>
+            <p style={{ color: '#555', marginBottom: '20px' }}>
+              Số tiền cần thanh toán: <strong style={{ color: '#ee4d2d', fontSize: '18px' }}>{calculateTotal().toLocaleString('vi-VN')} đ</strong>
+            </p>
+
+            {isProcessingPayment ? (
+              <div style={{ padding: '20px 0' }}>
+                <div style={{ 
+                  border: '4px solid #f3f3f3', borderTop: '4px solid #ee4d2d', 
+                  borderRadius: '50%', width: '40px', height: '40px', 
+                  animation: 'spin 1s linear infinite', margin: '0 auto', marginBottom: '15px' 
+                }} />
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                <p>Đang kết nối với ngân hàng...</p>
+              </div>
+            ) : (
+              <>
+                <button 
+                  onClick={handlePayment}
+                  style={{ width: '100%', padding: '12px', backgroundColor: '#0070ba', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' }}>
+                  💳 Quẹt thẻ nội địa / Visa
+                </button>
+                <button 
+                  onClick={handlePayment}
+                  style={{ width: '100%', padding: '12px', backgroundColor: '#a50064', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '15px' }}>
+                  📱 Thanh toán qua MoMo
+                </button>
+                <button 
+                  onClick={() => setShowPaymentModal(false)}
+                  style={{ width: '100%', padding: '10px', backgroundColor: '#f5f5f5', color: '#333', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}>
+                  Hủy bỏ
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
